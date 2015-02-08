@@ -77,9 +77,10 @@ int main(int argc, char* argv[])
       else
       {
         printf("multi\n");
-        pipeCmd();
-        //PipeCleaner (line,Procs);
-        //MultiPipe(Procs, 0);
+
+        char *noPipeCmd[TOKEN_MAX] = {};
+        deletePipes(cmd,noPipeCmd);
+        pipeCmd(noPipeCmd, 0);
       }
 
       printf("Fatal error\n");
@@ -172,11 +173,17 @@ void pipeCmd(char** noPipeCmd, int index)
       exit(1);
     }
 
-//
+    ///////// change the command!!//////////
+    /* reading will block if proc[i-1] hasn't written */
+    if (noPipeCmd[index+2]==NULL) {
+      make_tokenlist(noPipeCmd[index+1],tokens);
+      execvp(tokens[0],tokens);
+      printf("%s:  command not found\n",tokens[0]);
+      exit(0);
+    } else {
+      pipeCmd(noPipeCmd, index+1);
+    }
 
-    execlp("ps","ps","-le", NULL); 
-    perror("exec problem"); 
-    exit(1);
   }
   else 
   {
@@ -188,9 +195,9 @@ void pipeCmd(char** noPipeCmd, int index)
       exit(1);
     }
 
-    make_tokenlist(noPipeCmd[i],tokens);
+    make_tokenlist(noPipeCmd[index],tokens);
 
-    execlp(tokens[0],tokens);
+    execvp(tokens[0],tokens);
     printf("%s: command not found\n", tokens[0]);
     exit(1);
   }
@@ -204,7 +211,7 @@ void deletePipes(char *cmd, char *noPipeCmd[])
   do
   {
     i++;
-    noPipeCmd[i] = strtok(NULL, "|")
+    noPipeCmd[i] = strtok(NULL, "|");
   }
   while(noPipeCmd[i]!=NULL);
 }
