@@ -6,12 +6,6 @@
 #include "asn1.h"
 
 
-//#define CMD_SIZE 128
-//#define HISTORY_MAX 150
-//#define TOKEN_MAX 16
-
-
-typedef enum {false=0, true=1} boolean; 
 
 int main(int argc, char* argv[])
 {
@@ -37,7 +31,7 @@ int main(int argc, char* argv[])
     if(strcmp(cmd, "exit") == 0)
     {
       printf("000\n"); 
-      exit(1);
+      exit(0);
     }
 
     //store the command into the history if it is not "exit"
@@ -83,6 +77,7 @@ int main(int argc, char* argv[])
       else
       {
         printf("multi\n");
+        pipeCmd();
         //PipeCleaner (line,Procs);
         //MultiPipe(Procs, 0);
       }
@@ -142,6 +137,76 @@ void simpleCmd(char **tokens)
   execvp(tokens[0], tokens);
   printf("%s: command not found\n", tokens[0]);
   exit(0);
+}
+
+void pipeCmd(char** noPipeCmd, int index)
+{
+  int fds[2];
+  pid_t pid;
+  char* tokens[TOKEN_MAX]; 
+
+  /* attempt to create a pipe */ 
+  if(pipe(fds)<0) 
+  {
+    perror("Pipe Error"); 
+    exit(1);
+  }
+
+  /* create another process */
+  pid = fork(); 
+  if(pid<0) 
+  {
+    perror("Forking Error");
+    exit(1);
+  } 
+  else if (pid>0) 
+  {
+    /* parent process */ 
+    //close stdout
+    close(fds[1]);
+
+    /* reconnect to the reading end of the pipe */ 
+    if ( dup2(fds[0],STDOUT_FILENO)<0) 
+    {
+      perror("can't dup");  
+      exit(1);
+    }
+
+//
+
+    execlp("ps","ps","-le", NULL); 
+    perror("exec problem"); 
+    exit(1);
+  }
+  else 
+  {
+    /* child process */
+    close(fds[0]);
+    if(dup2(fds[1],STDOUT_FILENO) < 0) 
+    {
+      perror("can't dup");  
+      exit(1);
+    }
+
+    make_tokenlist(noPipeCmd[i],tokens);
+
+    execlp(tokens[0],tokens);
+    printf("%s: command not found\n", tokens[0]);
+    exit(1);
+  }
+}
+
+void deletePipes(char *cmd, char *noPipeCmd[])
+{
+
+  int i = 0;
+  noPipeCmd[i] = strtok(cmd, "|");
+  do
+  {
+    i++;
+    noPipeCmd[i] = strtok(NULL, "|")
+  }
+  while(noPipeCmd[i]!=NULL);
 }
 
 /*
