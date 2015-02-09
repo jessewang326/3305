@@ -7,10 +7,10 @@
  * File:asn1.c
  *
  * Note: I would like to use 1 late coupon for this assignment
- *       please use " gcc asn1.c -o asn1 " to compile the code
+ *       please use " make all " to compile the code
  */ 
 
-#include "asn1.h"
+#include "shell.h"
 
 int main(int argc, char* argv[])
 {
