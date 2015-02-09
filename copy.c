@@ -5,13 +5,11 @@ int main(int argc, char* argv[])
   char cmd[CMD_SIZE];
   char cmdHistory[HISTORY_MAX][CMD_SIZE] = {};
   char* tokens[TOKEN_MAX];
-  int historyIndex = 0, tokenCount, lastIndex, inIndex, outIndex;
+  int historyIndex = 0, tokenCount, lastIndex, inIndex = -1, outIndex = -1;
   pid_t pid;  
   int pipeFlag = 0;
 
   do{
-    inIndex = -1;
-    outIndex = -1;
     printf("jiaxi>");
     if (fgets(cmd,CMD_SIZE,stdin) != NULL) 
     {
@@ -20,6 +18,8 @@ int main(int argc, char* argv[])
     else 
       printf("no command!\n");
 
+    //  for (i = 0; i < n; i++)
+    //    printf("extracted token is %s\n", tokens[i]);
 
     //build-in command -- exit
     if(strcmp(cmd, "exit") == 0)
@@ -28,6 +28,7 @@ int main(int argc, char* argv[])
     }
 
     //store the command into the history if it is not "exit"
+    printf("input cmd is %s\n", cmd);
     strcpy(cmdHistory[historyIndex % HISTORY_MAX], cmd);
     lastIndex = historyIndex;
     historyIndex = (historyIndex + 1) % HISTORY_MAX;
@@ -39,11 +40,14 @@ int main(int argc, char* argv[])
     int i = 0;
     for(; i < tokenCount; i++)
     {
-      if(strcmp(tokens[i], "<") == 0 && i < (tokenCount-1))
+      if(strcmp(tokens[i], "<") != 0 && i < (tokenCount-1))
         inIndex = (i+1);
-      if(strcmp(tokens[i], ">") == 0 && i < (tokenCount-1))
+      if(strcmp(tokens[i], "<") != 0 && i < (tokenCount-1))
         outIndex = (i+1);
+      printf("token[%d], %s\n", i, tokens[i]);
     }
+    strcpy(cmd,cmdHistory[lastIndex]);
+    printf("input cmd2 is %s\n", cmd);
 
     //built-in command -- history
     if(strcmp(tokens[0], "history") == 0)
@@ -72,49 +76,74 @@ int main(int argc, char* argv[])
     //child process  -- shell(1)
     else
     {
-      //Input redirection
-      if(inIndex != -1)
-      {
-        //printf("inIndex %d, input file %s\n", inIndex, tokens[inIndex]);
-        int fdIn = open(tokens[inIndex], O_RDONLY, 0);
-        //redirect the input
-        dup2(fdIn, 0);
-        close(fdIn);
-
-        //clean up the "<" and the input file name
-        for(i = (inIndex-1);i<(tokenCount - 2);i++)
+      if(strstr(cmd,IN) != NULL || strstr(cmd,OUT) != NULL)
+      {     
+        /*
+        int i;
+        if (strstr(cmd,IN) != NULL)
         {
-          tokens[i] = tokens[i+2];
-        }
-        tokens[i] = NULL;
-        tokens[i+1] = NULL;
-      }
-
-
-      //Output redirection
-      if(outIndex != -1)
-      {
-        //the index position will change if array is modified in input redirection
-        if(inIndex != -1 && inIndex < outIndex)
-          outIndex -= 2;
-
-        //printf("outIndex %d, output file %s\n", outIndex, tokens[outIndex]);
-        int fdOut = open(tokens[outIndex], O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
-        //redirect the output
-        dup2(fdOut, 1);
-        close(fdOut);
-
-        //clean up the ">" and the output file name
-        for(i = (outIndex-1);i<(tokenCount - 2);i++)
+          for(i = 0; strcmp(tokens[i], "<") != 0 && i < (tokenCount-1); i++)
+          {
+            ; 
+          }
+          if(i != (tokenCount-1))
+          {
+          */
+        if(inIndex != -1)
         {
-          tokens[i] = tokens[i+2];
+            int fd0 = open(tokens[inIndex], O_RDONLY, 0);
+            dup2(fd0, STDIN_FILENO);
+            close(fd0);
+            int i;
+            for(i = (inIndex-1);i<(tokenCount - 2);i++)
+            {
+              tokens[i] = tokens[i+2];
+            }
+            tokens[i] = NULL;
+            tokens[i+1] = NULL;
         }
-        tokens[i] = NULL;
-        tokens[i+1] = NULL;
+            /*
+          }
+          else
+          {
+            printf("no input file!\n");
+          }
+        }
+        if (strstr(cmd,OUT) != NULL)
+        {
+          for(i = 0; strcmp(tokens[i], ">") != 0 && i < (tokenCount-1); i++)
+          {
+            printf("token[%d], %s\n",i,tokens[i]); 
+          }
+          if(i != (tokenCount-1))
+          {
+          */
+          else if(outIndex != -1)
+          {
+            int fd1 = creat(tokens[outIndex], 0644);
+            dup2(fd1, STDOUT_FILENO);
+            close(fd1);
+            int i;
+            for(i = (outIndex-1);i<(tokenCount - 2);i++)
+            {
+              tokens[i] = tokens[i+2];
+            }
+            tokens[i] = NULL;
+            tokens[i+1] = NULL;
+
+          }
+          printf("token 0 is %s\n", tokens[0]);
+            /*
+          }
+          else
+          {
+            printf("no output file!\n");
+          }
+          */
       }
 
       char *noPipeCmd[TOKEN_MAX] = {};
-      deletePipes(cmdHistory[lastIndex],noPipeCmd);
+      deletePipes(cmd,noPipeCmd);
 
       //if there is no pipe("|")
       if(!pipeFlag) 
@@ -124,6 +153,7 @@ int main(int argc, char* argv[])
       //if there is(are) pipe(s)
       else
       {
+        //printf("multi\n");
         pipeCmd(noPipeCmd, 0);
       }
 
@@ -182,7 +212,7 @@ void history(char cmdHistory[HISTORY_MAX][CMD_SIZE], int index, int num)
 
 void simpleCmd(char **tokens)
 {
-  printf("simple, cmd is %s\n", tokens[0]);
+  printf("enter simple");
   execvp(tokens[0], tokens);
   printf("%s: command not found\n", tokens[0]);
   exit(0);
@@ -212,7 +242,9 @@ void pipeCmd(char** noPipeCmd, int index)
   else if(pid>0) 
   {
     /* parent process */ 
+    //close stdout
     close(fds[1]);
+
     /* close stdin, reconnect to the reading end of the pipe */ 
     if(dup2(fds[0],STDIN_FILENO)<0) 
     {
@@ -238,7 +270,10 @@ void pipeCmd(char** noPipeCmd, int index)
   else 
   {
     /* child process */
+    //close stdin
     close(fds[0]);
+
+
     /* close stdout, reconnect to the writing end of the pipe */ 
     if(dup2(fds[1],STDOUT_FILENO) < 0) 
     {
@@ -260,12 +295,13 @@ void deletePipes(char *cmd, char *noPipeCmd[])
 
   int i = 0;
   noPipeCmd[i] = strtok(cmd, "|");
+  printf("noPipeCmd[0], %s\n", noPipeCmd[0]);
 
   do
   {
     i++;
     noPipeCmd[i] = strtok(NULL, "|");
-    //printf("noPipeCmd[%d], %s\n", i, noPipeCmd[i]);
+    printf("noPipeCmd[%d], %s\n", i, noPipeCmd[i]);
   }while(noPipeCmd[i] != NULL);
 }
 

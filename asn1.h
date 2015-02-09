@@ -1,9 +1,20 @@
 #ifndef _ASN1_H
 #define _ASN1_H
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h> 
+#include <unistd.h> 
+#include <string.h> 
+#include <sys/stat.h> 
+#include <fcntl.h>
+
 #define CMD_SIZE 128 
 #define HISTORY_MAX 150  
 #define TOKEN_MAX 16 
+#define IN "<"
+#define OUT ">"
+
 
 typedef enum {false=0, true=1} boolean;
 

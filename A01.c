@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
         
         if ((pid = fork())<0) perror("fork()");
         if (pid > 0) { /* Parent process */
-            wait(&child_status);
+            wait(NULL);
         } else { /*child process */
             PipeCleaner (line,Procs);
             
@@ -110,12 +110,15 @@ void MultiPipe (char **Procs, int i) {
         exit(1);
     } else if (pid>0) {/* parent process */
         close(fds[1]);
+
+
         /* close stdin and reconnect to the reading end of the pipe */
         if (dup2(fds[0],STDIN_FILENO) < 0) {
             perror("can't dup");
             exit(1);
         }
         
+
         /* reading will block if proc[i-1] hasn't written */
         if (Procs[i+2]==NULL) {
             PrepProgArray(Procs[i+1],args);
@@ -147,10 +150,12 @@ void PrepProgArray (char *Proc, char **prog_argv) {
     int i;
     /*Parse " "*/
     prog_argv[0] = strtok( Proc, SpaceSymbol );
+    printf("prog_argv[0],%s\n", prog_argv[i]);
     
     for (i=1; prog_argv[i-1]!=NULL; i++) {
         /*next word*/
         prog_argv[i] = strtok(NULL,SpaceSymbol);
+        printf("prog_argv[%d],%s\n", i, prog_argv[i]);
     } 
 }
 
@@ -158,10 +163,12 @@ void PipeCleaner (char *line, char **Procs) {
     int i;
     /*Parse "|"*/
     Procs[0] = strtok( line, PipeSymbol );
+    printf("Procs[0], %s\n",  Procs[0]);
     
     for (i=1; Procs[i-1]!=NULL; i++) {
         /*next program (i.e. prog1 | prog2 | ... )*/
         Procs[i] = strtok(NULL, PipeSymbol ); 
+        printf("Procs[%d], %s\n", i, Procs[i]);
     }
 }
 
