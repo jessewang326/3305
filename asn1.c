@@ -1,3 +1,15 @@
+/*
+ * Assignment 1
+ * Author: Jiaxi Wang
+ * Stuent #: 250620848
+ * Email: jwang724@uwo.ca
+ *
+ * File:asn1.c
+ *
+ * Note: I would like to use 1 late coupon for this assignment
+ *       please use " gcc asn1.c -o asn1 " to compile the code
+ */ 
+
 #include "asn1.h"
 
 int main(int argc, char* argv[])
@@ -7,11 +19,14 @@ int main(int argc, char* argv[])
   char* tokens[TOKEN_MAX];
   int historyIndex = 0, tokenCount, lastIndex, inIndex, outIndex;
   pid_t pid;  
-  int pipeFlag = 0;
+  int pipeFlag;
 
   do{
     inIndex = -1;
     outIndex = -1;
+    pipeFlag = 0;
+
+
     printf("jiaxi>");
     if (fgets(cmd,CMD_SIZE,stdin) != NULL) 
     {
@@ -182,7 +197,6 @@ void history(char cmdHistory[HISTORY_MAX][CMD_SIZE], int index, int num)
 
 void simpleCmd(char **tokens)
 {
-  printf("simple, cmd is %s\n", tokens[0]);
   execvp(tokens[0], tokens);
   printf("%s: command not found\n", tokens[0]);
   exit(0);
@@ -220,10 +234,10 @@ void pipeCmd(char** noPipeCmd, int index)
       exit(1);
     }
 
-    //check the # of cmd left
+    //check the current cmd the 2nd left cmd
     if (noPipeCmd[index+2]==NULL) 
     {
-      //the parent process runs the last cmd
+      //the parent process runs the last cmd, and the child process will run the curr one
       make_tokenlist(noPipeCmd[index+1],tokens);
       execvp(tokens[0],tokens);
       printf("%s:  command not found\n",tokens[0]);
