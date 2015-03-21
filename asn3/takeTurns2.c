@@ -74,12 +74,12 @@ int main(int argc, char *argv[])
 	}
 
   // create threads A&B 
-  if(pthread_create(&threadA, NULL, opA, (void *)ARG)) {
+  if(pthread_create(&threadA, NULL, opA, NULL)) {
     fprintf(stderr,"Error while creating thread A\n");
     exit(1);
   }
 
-  if(pthread_create(&threadB, NULL, opB, (void *)ARG)) {
+  if(pthread_create(&threadB, NULL, opB, NULL)) {
     fprintf(stderr,"Error while creating thread B\n");
     exit(1);
   }
