@@ -1,153 +1,156 @@
-/*
- * Sample solution to 3305b assignment #3
- * Takes in the name of a PPM image file on the command-line and
- * prints out the (x1, y1) - (x2, y2) coordinates of the smallest
- * bounding box which does not crop any of the foreground. Pixel
- * (0, 0) is taken to be the background colour.
- *
- * Mike Burrell
- *
- */
-
 #include <stdio.h>
-#include <string.h>
-#include <errno.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
+#include <stdbool.h>
+#include <pthread.h>
+#include <semaphore.h>
 
-static int width, height;
+/*** GLOBAL VARIABLES ***/
+static int MAX_CAPACITY;
+static int NUM_STUDENTS;
+static int NUM_QUESTIONS;
+static int TOTAL_QUESTIONS;
 
-/*
- * bg is the background colour. pic is the pointer to the first
- * pixel in the pixel array
- *
- */
-static struct pixel {
-	unsigned char r, g, b;
-} bg, *pic;
+sem_t office_capacity_sem; // Used for locking down office when full
+sem_t enter_sem; // Used for making sure people don't say they're entering well after someone else says they're waiting
+sem_t question_sem; // Used to lock down question asking until an answer is received from the TA
 
-static
-struct pixel
-pixel_at(int x, int y)
+bool question_open;
+int questions_answered;
+int office_occupancy;
+
+struct Student_arg {
+	int id;
+	int questions;
+};
+
+void *studentPrint(void *arg);
+void *taPrint(void *arg);
+
+int main(int argc, char const *argv[])
 {
-	return pic[y * width + x];
-}
+	// Get arguments
+	if(argc != 4) {
+		printf("Invalid number of arguments.\n");
+		exit(1);
+	}
+	NUM_STUDENTS = atoi(argv[1]);
+	MAX_CAPACITY = atoi(argv[2]);
+	NUM_QUESTIONS = atoi(argv[3]);
+	TOTAL_QUESTIONS = NUM_STUDENTS * NUM_QUESTIONS;
 
-/*
- * finds x1 (the leftmost boundary). we start with x = width and
- * refine that through each iteration. we make sure to only
- * iterate between the topmost and bottommost boundaries, so
- * those need to be known already.
- */
-static
-int
-find_x1(int y1, int y2)
-{
-	int w = width;
-	int y;
-	for (y = y1; y <= y2; y++) {
-		int x;
-		for (x = 0; x < w; x++) {
-			struct pixel p = pixel_at(x, y);
-			if (p.r != bg.r || p.g != bg.g || p.b != bg.b) {
-				w = x;
-				break;
-			}
+	// Initialize global variables
+	question_open = false;
+	questions_answered = 0;
+	office_occupancy = 0;
+
+	// Initialize semaphores
+	if(sem_init(&office_capacity_sem, 0, MAX_CAPACITY)) { 
+		printf("Error creating office capacity semaphore");
+		exit(1);
+	}
+	if(sem_init(&enter_sem, 0, 1)) {
+		printf("Error creating enter semaphore");
+		exit(1);
+	}
+	if(sem_init(&question_sem, 0, 1)) {
+		printf("Error creating question semaphore");
+		exit(1);
+	}
+
+	// Initialize student parameters
+	struct Student_arg* s_args[NUM_STUDENTS];
+	int i; for(i = 0; i < NUM_STUDENTS; i++) {
+		s_args[i] = (struct Student_arg*)malloc(sizeof(struct Student_arg));
+		s_args[i]->id = i+1;
+		s_args[i]->questions = 1;
+	}
+
+	// Create student threads
+	pthread_t student_threads[NUM_STUDENTS];
+	for (i = 0; i < NUM_STUDENTS; i++) {
+		if(pthread_create(&student_threads[i], NULL, studentPrint, (void *)s_args[i])) {
+			printf("Error creating student thread %d\n", i);
+			exit(1);
 		}
 	}
-	return w;
-}
 
-/*
- * works just like find_x1, but finds the rightmost boundary instead of
- * the leftmost boundary. this should probably be merged with find_x1.
- *
- */
-static
-int
-find_x2(int y1, int y2)
-{
-	int w = -1;
-	int y;
-	for (y = y1; y <= y2; y++) {
-		int x;
-		for (x = width - 1; x > w; x--) {
-			struct pixel p = pixel_at(x, y);
-			if (p.r != bg.r || p.g != bg.g || p.b != bg.b) {
-				w = x;
-				break;
-			}
+	// Create TA thread
+	pthread_t ta_thread;
+	if(pthread_create(&ta_thread, NULL, taPrint, NULL)) {
+		printf("Error creating TA thread\n");
+		exit(1);
+	}
+
+	// Join student threads
+	for(i = 0; i < NUM_STUDENTS; i++) {
+		if(pthread_join(student_threads[i], NULL)) {
+			printf("Error joining student thread %d\n", i);
+			exit(1);
 		}
 	}
-	return w;
-}
 
-/*
- * finds either the topmost or bottommost boundary. y is the starting
- * y coordinate (y = 0 for the topmost boundary, y = height - 1 for the
- * bottommost). d is the direction to look in (y = 1 means scan
- * downwards; y = -1 means scan upwards)
- *
- */
-static
-int
-find_y(int y, int d)
-{
-	while (1) {
-		int x;
-		for (x = 0; x < width; x++) {
-			struct pixel p = pixel_at(x, y);
-			if (p.r != bg.r || p.g != bg.g || p.b != bg.b)
-				return y;
-		}
-		y += d;
+	// Joint TA thread
+	if(pthread_join(ta_thread, NULL)) {
+		printf("Error joining TA thread\n");
+		exit(1);
 	}
-}
 
-/*
- * returns the file size of the file attached to an open file descriptor.
- * I should probably check for errors here
- *
- */
-static
-unsigned long
-fsize(int fd)
-{
-	struct stat s;
-	fstat(fd, &s);
-	return s.st_size;
-}
+	sem_destroy(&office_capacity_sem);
+	sem_destroy(&question_sem);
+	sem_destroy(&enter_sem);
 
-int
-main(int argc, char **argv)
-{
-	char *whole_file;
-	if (argc != 2) {
-		fprintf(stderr, "usage: %s image.pnm\n", argv[0]);
-		return 1;
-	}
-	int fd = open(argv[1], O_RDONLY);
-	if (fd < 0) {
-		fprintf(stderr, "cannot open '%s': %s\n", argv[1],
-			strerror(errno));
-		return 1;
-	}
-	whole_file = mmap(0, fsize(fd), PROT_READ, MAP_PRIVATE, fd, 0);
-	char *str = whole_file;
-	int filetype, maxval;
-	sscanf(str, "P%d", &filetype);
-	str = strchr(str, '\n') + 1;
-	sscanf(str, "%d %d", &width, &height);
-	str = strchr(str, '\n') + 1;
-	sscanf(str, "%d", &maxval);
-	pic = (struct pixel *)(strchr(str, '\n') + 1);
-	bg = pixel_at(0, 0);
-	int y1 = find_y(0, 1);
-	int y2 = find_y(height - 1, -1);
-	printf("(%d, %d) - (%d, %d)\n", find_x1(y1, y2), y1,
-		find_x2(y1, y2), y2);
+
 	return 0;
+}
+
+void *studentPrint(void *arg)
+{
+	struct Student_arg *s = (struct Student_arg*)arg;
+	// Try to enter the TA's office
+	sem_wait(&enter_sem);
+	if(sem_trywait(&office_capacity_sem))
+	{
+		printf("I am student %d and I'm waiting outside the TA's door\n", s->id);
+		sem_wait(&office_capacity_sem);
+	}
+	// Successfully enter the TA's office
+	printf("I am student %d and I'm entering the office\n", s->id);
+	sem_post(&enter_sem);
+
+	/*** QUESTIONS MUST BE ASKED HERE ***/
+	//
+	//
+	// Enter the question critical section
+	while(s->questions <= NUM_QUESTIONS)
+	{
+		sem_wait(&question_sem);
+		printf("I am student %d and I'm asking question %d\n", s->id, s->questions);
+		s->questions += 1;
+		question_open = true;
+		while(question_open) 
+		{// Loop until question gets answered
+		}
+		sem_post(&question_sem);
+	}
+	//
+	//
+
+	// Leave the office and allow another student to fit in
+	printf("I am student %d and I'm leaving the office\n", s->id);
+	sem_post(&office_capacity_sem);
+}
+
+void *taPrint(void *arg)
+{
+	while(questions_answered < TOTAL_QUESTIONS)
+	{
+		// Questions are answered after they are asked! Then the floor
+		// is opened up for another question.
+		if(question_open)
+		{
+			printf("I am TA and this will be discussed in class\n");
+			questions_answered++;
+			question_open = false;
+		}
+	}
 }
