@@ -41,7 +41,7 @@ void *produce(void *arg)
       {
         sem_wait(&p_lock);
         stock1++;
-        printf("producer 1 has put an item in its buffer, stock1 is %d, %d left\n", stock1, (p_num1 - 1));
+        printf("producer 1 has put an item in its buffer, stock1 is %d, %d left to produce\n", stock1, (p_num1 - 1));
         sem_post(&p_lock);
         p_num1--;
       }
@@ -56,7 +56,7 @@ void *produce(void *arg)
         sem_wait(&p_lock);
         stock2++;
         //printf("producer 2 has put an item in its buffer\n");
-        printf("producer 2 has put an item in its buffer, stock2 is %d, %d left\n", stock2, (p_num2 - 1));
+        printf("producer 2 has put an item in its buffer, stock2 is %d, %d left to produce\n", stock2, (p_num2 - 1));
         sem_post(&p_lock);
         p_num2--;
       }
@@ -77,7 +77,7 @@ void *consume(void *arg)
       sem_post(&c_lock);
       //printf("Consumer has consumed an item from producer 1\n");
       total--;
-      printf("Consumer has consumed an item from producer 1, stock1 is %d, %d left\n", stock1, total);
+      printf("Consumer has consumed an item from producer 1, stock1 is %d, %d left to consume in total\n", stock1, total);
     }
     else if(stock2 > 0)
     {
@@ -86,7 +86,7 @@ void *consume(void *arg)
       sem_post(&c_lock);
       //printf("Consumer has consumed an item from producer 2\n");
       total--;
-      printf("Consumer has consumed an item from producer 2, stock2 is %d, %d left\n", stock2, total);
+      printf("Consumer has consumed an item from producer 2, stock2 is %d, %d left to consume in total\n", stock2, total);
     }
   }
   return NULL;
